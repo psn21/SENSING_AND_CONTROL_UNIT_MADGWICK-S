@@ -3,6 +3,7 @@
 #include <ros.h>
 #include <math.h>
 #include <std_msgs/Int32MultiArray.h>
+#include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Float64.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Vector3.h>
@@ -11,7 +12,7 @@
 #include "MadgwickAHRS.h"
 #include "MS5837.h"
 #include <mpu6050.hpp>
-#include <geometry_msgs/Quaternion.h>
+// #include <geometry_msgs/Quaternion.h>
 #include "main.hpp"
 
 float raw_a[3];
@@ -25,27 +26,29 @@ float _gx_offset = 0.0, _gy_offset = 0.0, _gz_offset = 0.0;
 float _mx_offset = 59.94, _my_offset = 89.26, _mz_offset = 75.24;
 float soft_iron_matrix[3][3]={{0.989,-0.026,-0.013},{-0.026,0.963,-0.009},{-0.013,-0.009,1.052}};
 float yaw, pitch, roll, depth,roll_lpf=0,pitch_lpf=0,yaw_lpf=0;
-float qx,qy,qz,qw;
+float values[3];
+// float qx,qy,qz,qw;
 int prev_time_update, prev_time_publish;
 
 std_msgs::Float64 depth_data;
 geometry_msgs::Vector3 linear_acceleration;
 geometry_msgs::Vector3 angular_velocity;
 geometry_msgs::Vector3 magnetic_field;
+std_msgs::Float32MultiArray orientation;
 geometry_msgs::Pose pose;
 std_msgs::Int32MultiArray pwm_msg;
 
+// void setThrusterThrottle(const int8_t *pwm_values);
 void throttleCb(const std_msgs::Int32MultiArray& pwm_msg);
-void setThrusterThrottle(const int8_t *pwm_values);
 
 ros::NodeHandle nh;
 ros::Subscriber <std_msgs::Int32MultiArray> sub("pwm_values", &throttleCb);
 ros::Publisher pub1("linear_acceleration", &linear_acceleration);
 ros::Publisher pub2("angular_velocity", &angular_velocity);
 ros::Publisher pub3("magnetic_field", &magnetic_field);
-ros::Publisher pub4("pose", &pose);
+ros::Publisher pub4("orientation", &orientation);
 ros::Publisher pub5("depth_data", &depth_data);
-
+// ros::Publisher pub6("pose", &pose);
 MPU6050 gyro;
 FXOS8700QBasic Magnetometer;
 MS5837 Depth_Sensor;
@@ -75,7 +78,7 @@ void setup()
   nh.advertise(pub3);
   nh.advertise(pub4);
   nh.advertise(pub5);
-
+  // nh.advertise(pub6);
   initializeThrusters();
   delay(1000);
   initializeImu();
@@ -94,7 +97,7 @@ void loop()
     getSensorData();
     applyImuCalibration();   
     updateOrientation();
-    eulerToQuaternion();
+    // eulerToQuaternion();
     applyLowPassFilter();
     prev_time_update = millis();
   }
@@ -105,16 +108,17 @@ void loop()
     pub1.publish(&linear_acceleration);
     pub2.publish(&angular_velocity);
     pub3.publish(&magnetic_field);
-    pub4.publish(&pose);
+    pub4.publish(&orientation);
     pub5.publish(&depth_data);
+    // pub6.publish(&pose);
     prev_time_publish = millis();
     }
 
-    Serial.print(roll_lpf);
-    Serial.print("/");
-    Serial.print(pitch_lpf);
-    Serial.print("/");
-    Serial.print(yaw_lpf);
+    // Serial.print(roll_lpf);
+    // Serial.print("/");
+    // Serial.print(pitch_lpf);
+    // Serial.print("/");
+    // Serial.print(yaw_lpf);
     // Serial.print("raw_gx: ");
     // Serial.print(raw_g[0]);
     // Serial.print("raw_gy: ");
@@ -190,15 +194,15 @@ void initializeThrusters(){
   }
 }
 
-void setThrusterThrottle(const int8_t *pwm_values){
-  int pwm_value;
-  for (int thruster_index = 0; thruster_index < NUMBER_OF_THRUSTERS; thruster_index++){
-    pwm_value = pwm_values[thruster_index];
-    for(int value=1474; value<pwm_values[thruster_index]; value+=10){
-      g_thrusters[thruster_index].writeMicroseconds(pwm_value);
-    }
-  }
-}
+// void setThrusterThrottle(const int8_t *pwm_values){
+//   int pwm_value;
+//   for (int thruster_index = 0; thruster_index < NUMBER_OF_THRUSTERS; thruster_index++){
+//     pwm_value = pwm_values[thruster_index];
+//     for(int value=1474; value<pwm_values[thruster_index]; value+=10){
+//       g_thrusters[thruster_index].writeMicroseconds(pwm_value);
+//     }
+//   }
+// }
 
 void throttleCb(const std_msgs::Int32MultiArray& pwm_msg){
     int pwm_value;
@@ -280,18 +284,22 @@ void updateOrientation()
 {
     Filter.update(cal_g[0], cal_g[1], cal_g[2], cal_a[0], cal_a[1], cal_a[2], cal_m[0], cal_m[1], cal_m[2]);
     yaw = Filter.getYaw();
+    values[2]=yaw;
     pitch = Filter.getPitch();
+    values[1]=pitch;
     roll = Filter.getRoll();
+    values[0]=roll;
+
     prev_time_update = millis();
 }
 
-void eulerToQuaternion()
-{
-    qx = sin(roll/2) * cos(pitch/2) * cos(yaw/2) - cos(roll/2) * sin(pitch/2) * sin(yaw/2);
-    qy = cos(roll/2) * sin(pitch/2) * cos(yaw/2) + sin(roll/2) * cos(pitch/2) * sin(yaw/2);
-    qz = cos(roll/2) * cos(pitch/2) * sin(yaw/2) - sin(roll/2) * sin(pitch/2) * cos(yaw/2);
-    qw = cos(roll/2) * cos(pitch/2) * cos(yaw/2) + sin(roll/2) * sin(pitch/2) * sin(yaw/2);
-}
+// void eulerToQuaternion()
+// {
+//     qx = sin(roll/2) * cos(pitch/2) * cos(yaw/2) - cos(roll/2) * sin(pitch/2) * sin(yaw/2);
+//     qy = cos(roll/2) * sin(pitch/2) * cos(yaw/2) + sin(roll/2) * cos(pitch/2) * sin(yaw/2);
+//     qz = cos(roll/2) * cos(pitch/2) * sin(yaw/2) - sin(roll/2) * sin(pitch/2) * cos(yaw/2);
+//     qw = cos(roll/2) * cos(pitch/2) * cos(yaw/2) + sin(roll/2) * sin(pitch/2) * sin(yaw/2);
+// }
 
 void applyLowPassFilter()
 {
@@ -303,25 +311,29 @@ void applyLowPassFilter()
 void updatePublishData()
 {
     depth_data.data = depth;
+    
+    //publishing raw imu data
+    linear_acceleration.x= raw_a[0];
+    linear_acceleration.y= raw_a[1];
+    linear_acceleration.z= raw_a[2];
 
-    linear_acceleration.x= cal_a[0];
-    linear_acceleration.y= cal_a[1];
-    linear_acceleration.z= cal_a[2];
+    angular_velocity.x= raw_g[0];
+    angular_velocity.y= raw_g[1];
+    angular_velocity.z= raw_g[2];
 
-    angular_velocity.x= cal_g[0];
-    angular_velocity.y= cal_g[1];
-    angular_velocity.z= cal_g[2];
+    magnetic_field.x= raw_m[0];
+    magnetic_field.y= raw_m[1];
+    magnetic_field.z= raw_m[2];
 
-    magnetic_field.x= cal_m[0];
-    magnetic_field.y= cal_m[1];
-    magnetic_field.z= cal_m[2];
+    orientation.data_length = 4;
+    orientation.data=values;
 
-    pose.position.x = roll_lpf;
-    pose.position.y = pitch_lpf;
-    pose.position.z = yaw_lpf;
+    // pose.position.x = roll_lpf;
+    // pose.position.y = pitch_lpf;
+    // pose.position.z = yaw_lpf;
 
-    pose.orientation.x=qx;
-    pose.orientation.y=qy;
-    pose.orientation.z=qz;
-    pose.orientation.w=qw;
+    // pose.orientation.x=qx;
+    // pose.orientation.y=qy;
+    // pose.orientation.z=qz;
+    // pose.orientation.w=qw;
 }
